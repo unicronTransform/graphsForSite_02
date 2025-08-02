@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Interactive Gauss Map</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body { font-family: sans-serif; }
+    #controls { margin: 10px; }
+  </style>
+</head>
+<body>
+
+<h2>Interactive Gauss Map Visualization</h2>
+
+<div id="controls">
+  <label>Frequency: <input id="freq" type="range" min="0" max="5" step="0.1" value="1"></label>
+  <label>Amplitude: <input id="amp" type="range" min="0" max="5" step="0.1" value="1"></label>
+</div>
+
+<div id="plot" style="width:100%; height:600px;"></div>
+
+<script>
+function compute(freq, amp) {
+  const n = 30;
+  const x = [], y = [];
+  for(let i=0; i<n; i++){
+    x.push(-1 + 2*i/(n-1));
+    y.push(-1 + 2*i/(n-1));
+  }
+  const z = [];
+  const nx = [], ny = [], nz = [];
+  for(let i=0;i<n;i++){
+    const zi=[]; const nxi=[]; const nyi=[]; const nzi=[];
+    for(let j=0;j<n;j++){
+      const xv=x[j], yv=y[i];
+      const val = amp*Math.sin(Math.PI*freq*xv)*Math.cos(Math.PI*freq*yv);
+      zi.push(val);
+      const dzdx = amp*freq*Math.PI*Math.cos(Math.PI*freq*xv)*Math.cos(Math.PI*freq*yv);
+      const dzdy = -amp*freq*Math.PI*Math.sin(Math.PI*freq*xv)*Math.sin(Math.PI*freq*yv);
+      const ux = -dzdx, uy = -dzdy, uz = 1;
+      const norm = Math.sqrt(ux*ux+uy*uy+uz*uz);
+      nxi.push(ux/norm); nyi.push(uy/norm); nzi.push(uz/norm);
+    }
+    z.push(zi); nx.push(nxi); ny.push(nyi); nz.push(nzi);
+  }
+  return {x, y, z, nx, ny, nz};
+}
+
+function draw(freq, amp){
+  const data = compute(freq, amp);
+
+  const surface = {
+    type:'surface', x:data.x, y:data.y, z:data.z,
+    colorscale:'Viridis', opacity:0.7, showscale:false,
+  };
+  const normals = {
+    type:'cone',
+    x: data.x.flat(), y: data.y.flat(), z: data.z.flat(),
+    u: data.nx.flat(), v: data.ny.flat(), w: data.nz.flat(),
+    sizemode:'absolute', sizeref:0.3, anchor:'tail',
+    showscale:false, color:'red', name:'Normals'
+  };
+
+  const u = [], vgrid = [];
+  for(let i=0; i<40; i++){
+    u[i] = 2*Math.PI*i/39;
+    vgrid[i] = Math.PI*i/19;
+  }
+  const sx=[], sy=[], sz=[];
+  for(let i=0;i<40;i++){
+    sx[i]=[]; sy[i]=[]; sz[i]=[];
+    for(let j=0;j<20;j++){
+      sx[i][j]=Math.cos(u[i])*Math.sin(vgrid[j]);
+      sy[i][j]=Math.sin(u[i])*Math.sin(vgrid[j]);
+      sz[i][j]=Math.cos(vgrid[j]);
+    }
+  }
+  const sphere = { type:'surface', x:sx, y:sy, z:sz,
+                   opacity:0.3, color:'lightblue', showscale:false };
+
+  const normalsOnSphere = {
+    type:'cone',
+    x: data.nx.flat(), y: data.ny.flat(), z: data.nz.flat(),
+    u: data.nx.flat(), v: data.ny.flat(), w: data.nz.flat(),
+    sizemode:'absolute', sizeref:0.3, anchor:'tail',
+    showscale:false, color:'black', name:'Gauss normals'
+  };
+
+  const layout = {
+    title: `Gauss Map (freq=${freq}, amp=${amp})`,
+    grid:{rows:1, columns:2},
+    scene: { domain:{x:[0,0.45], y:[0,1]}, aspectmode:'cube' },
+    scene2:{ domain:{x:[0.55,1], y:[0,1]}, aspectmode:'cube' }
+  };
+  Plotly.newPlot('plot', [surface, normals, sphere, normalsOnSphere], layout);
+}
+
+document.getElementById('freq').oninput = e => draw(e.target.value, document.getElementById('amp').value);
+document.getElementById('amp').oninput = e => draw(document.getElementById('freq').value, e.target.value);
+
+window.onload = () => draw(1.0, 1.0);
+</script>
+</body>
+</html>
