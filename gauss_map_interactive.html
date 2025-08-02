@@ -1,152 +1,161 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Interactive Gauss Map Visualization</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Interactive Gauss Map Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-<h2>Interactive Gauss Map Visualization</h2>
-<label for="freqSlider">Frequency:</label>
-<input type="range" id="freqSlider" min="0.1" max="3.0" step="0.1" value="1.0">
-<span id="freqValue">1.0</span>
-&nbsp;&nbsp;
-<label for="ampSlider">Amplitude:</label>
-<input type="range" id="ampSlider" min="0.1" max="3.0" step="0.1" value="1.0">
-<span id="ampValue">1.0</span>
 
-<div id="plot" style="display: flex;"></div>
+<h2>Interactive Gauss Map Visualization</h2>
+
+<div>
+    <label for="frequency">Frequency:</label>
+    <input type="range" id="frequency" min="0.1" max="5.0" step="0.1" value="1">
+    <span id="freq-value">1.0</span>
+</div>
+<div>
+    <label for="amplitude">Amplitude:</label>
+    <input type="range" id="amplitude" min="0.1" max="5.0" step="0.1" value="1">
+    <span id="amp-value">1.0</span>
+</div>
+
+<div id="surface-plot" style="width: 48%; display: inline-block;"></div>
+<div id="sphere-plot" style="width: 48%; display: inline-block;"></div>
 
 <script>
-function generateData(freq, amp) {
-    const resolution = 20;
-    const x = [], y = [], z = [], nx = [], ny = [], nz = [], px = [], py = [], pz = [];
-    for (let i = 0; i < resolution; i++) {
-        let xi = -1 + 2 * i / (resolution - 1);
-        for (let j = 0; j < resolution; j++) {
-            let yj = -1 + 2 * j / (resolution - 1);
+function computeSurfaceData(freq, amp) {
+    const x = [], y = [], z = [], u = [], v = [], w = [];
+    const sphereU = [], sphereV = [], sphereW = [];
 
-            const fz = amp * Math.sin(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
-            const fx = amp * freq * Math.PI * Math.cos(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
-            const fy = -amp * freq * Math.PI * Math.sin(freq * Math.PI * xi) * Math.sin(freq * Math.PI * yj);
+    const steps = 100;
+    for (let i = 0; i < steps; i++) {
+        x[i] = [];
+        y[i] = [];
+        z[i] = [];
 
-            // Store surface point
-            x.push(xi);
-            y.push(yj);
-            z.push(fz);
+        for (let j = 0; j < steps; j++) {
+            const xi = -1 + 2 * i / (steps - 1);
+            const yj = -1 + 2 * j / (steps - 1);
+            x[i][j] = xi;
+            y[i][j] = yj;
+            z[i][j] = amp * Math.sin(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
 
-            // Compute normalized normal vector
-            let nx_i = -fx, ny_i = -fy, nz_i = 1;
-            let norm = Math.sqrt(nx_i ** 2 + ny_i ** 2 + nz_i ** 2);
-            nx_i /= norm;
-            ny_i /= norm;
-            nz_i /= norm;
-            
-            // Store normal vector for quiver
-            nx.push(nx_i);
-            ny.push(ny_i);
-            nz.push(nz_i);
+            // Gradients (dz/dx, dz/dy)
+            const dzdx = amp * freq * Math.PI * Math.cos(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
+            const dzdy = -amp * freq * Math.PI * Math.sin(freq * Math.PI * xi) * Math.sin(freq * Math.PI * yj);
 
-            // Mapped points on unit sphere (Gauss map)
-            px.push(nx_i);
-            py.push(ny_i);
-            pz.push(nz_i);
+            // Normal vector
+            let nx = -dzdx, ny = -dzdy, nz = 1.0;
+            const mag = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            nx /= mag; ny /= mag; nz /= mag;
+
+            u.push(nx); v.push(ny); w.push(nz);  // normals on surface
+            sphereU.push(nx); sphereV.push(ny); sphereW.push(nz);  // normals on sphere
         }
     }
-    return {x, y, z, nx, ny, nz, px, py, pz};
+
+    return { x, y, z, u, v, w, sphereU, sphereV, sphereW };
 }
 
-function plot(freq, amp) {
-    document.getElementById('freqValue').textContent = freq;
-    document.getElementById('ampValue').textContent = amp;
+function drawPlots(freq, amp) {
+    const { x, y, z, u, v, w, sphereU, sphereV, sphereW } = computeSurfaceData(freq, amp);
+    const flatX = [].concat(...x), flatY = [].concat(...y), flatZ = [].concat(...z);
 
-    const {x, y, z, nx, ny, nz, px, py, pz} = generateData(freq, amp);
-
+    // Surface with normals
     const surfaceTrace = {
-        type: 'mesh3d', x, y, z,
-        intensity: z,
+        type: 'surface',
+        x: x, y: y, z: z,
         colorscale: 'Viridis',
-        opacity: 0.7,
-        name: 'Surface'
+        opacity: 0.7
     };
-
-    const normalTrace = {
+    const vectorTrace = {
         type: 'cone',
-        x, y, z,
-        u: nx, v: ny, w: nz,
-        sizemode: 'absolute', sizeref: 0.3,
-        anchor: 'tail',
-        colorscale: [[0, 'red'], [1, 'red']],
+        x: flatX,
+        y: flatY,
+        z: flatZ,
+        u: u,
+        v: v,
+        w: w,
+        sizemode: "absolute",
+        sizeref: 0.4,
+        anchor: "tail",
         showscale: false,
-        name: 'Normals'
+        colorscale: [[0, 'red'], [1, 'red']]
     };
 
+    Plotly.newPlot("surface-plot", [surfaceTrace, vectorTrace], {
+        title: "Surface with Normals",
+        scene: { aspectmode: "cube" }
+    });
+
+    // Gauss map on unit sphere
     const sphereTrace = {
         type: 'surface',
         x: [], y: [], z: [],
         opacity: 0.3,
-        colorscale: 'RdBu',
+        surfacecolor: [],
         showscale: false
     };
 
-    const SPHERE_RES = 30;
-    for (let i = 0; i < SPHERE_RES; i++) {
-        let theta = 2 * Math.PI * i / SPHERE_RES;
-        let xRow = [], yRow = [], zRow = [];
-        for (let j = 0; j < SPHERE_RES; j++) {
-            let phi = Math.PI * j / (SPHERE_RES - 1);
-            xRow.push(Math.sin(phi) * Math.cos(theta));
-            yRow.push(Math.sin(phi) * Math.sin(theta));
-            zRow.push(Math.cos(phi));
+    const steps = 30;
+    for (let i = 0; i <= steps; i++) {
+        const theta = i * Math.PI / steps;
+        const rowX = [], rowY = [], rowZ = [];
+        for (let j = 0; j <= steps; j++) {
+            const phi = j * 2 * Math.PI / steps;
+            rowX.push(Math.sin(theta) * Math.cos(phi));
+            rowY.push(Math.sin(theta) * Math.sin(phi));
+            rowZ.push(Math.cos(theta));
         }
-        sphereTrace.x.push(xRow);
-        sphereTrace.y.push(yRow);
-        sphereTrace.z.push(zRow);
+        sphereTrace.x.push(rowX);
+        sphereTrace.y.push(rowY);
+        sphereTrace.z.push(rowZ);
     }
 
-    const normalPoints = {
-        type: 'scatter3d',
-        mode: 'markers',
-        x: px,
-        y: py,
-        z: pz,
-        marker: {
-            size: 3,
-            color: 'black'
-        },
-        name: 'Mapped Normals'
+    const normalsTrace = {
+        type: 'cone',
+        x: Array(sphereU.length).fill(0),
+        y: Array(sphereV.length).fill(0),
+        z: Array(sphereW.length).fill(0),
+        u: sphereU,
+        v: sphereV,
+        w: sphereW,
+        sizemode: "absolute",
+        sizeref: 0.4,
+        anchor: "tail",
+        showscale: false,
+        colorscale: [[0, 'red'], [1, 'red']]
     };
 
-    const layout = {
-        title: `Gauss Map (freq=${freq}, amp=${amp})`,
-        grid: {rows: 1, columns: 2, pattern: 'independent'},
-        margin: {l: 0, r: 0, t: 40, b: 0},
+    Plotly.newPlot("sphere-plot", [sphereTrace, normalsTrace], {
+        title: "Gauss Map (Normals on Unit Sphere)",
         scene: {
-            domain: {x: [0, 0.48]},
-            title: 'Surface with Normals',
-            xaxis: {title: 'x'}, yaxis: {title: 'y'}, zaxis: {title: 'z'}
-        },
-        scene2: {
-            domain: {x: [0.52, 1]},
-            title: 'Gauss Map (Normals on Unit Sphere)',
-            xaxis: {title: 'x', range: [-1.1, 1.1]},
-            yaxis: {title: 'y', range: [-1.1, 1.1]},
-            zaxis: {title: 'z', range: [-1.1, 1.1]}
+            aspectmode: "cube",
+            xaxis: { range: [-1.1, 1.1] },
+            yaxis: { range: [-1.1, 1.1] },
+            zaxis: { range: [-1.1, 1.1] }
         }
-    };
-
-    Plotly.newPlot('plot', [surfaceTrace, normalTrace, sphereTrace, normalPoints], layout);
+    });
 }
 
-// Initial plot
-plot(1.0, 1.0);
+document.getElementById("frequency").addEventListener("input", function() {
+    const freq = parseFloat(this.value);
+    const amp = parseFloat(document.getElementById("amplitude").value);
+    document.getElementById("freq-value").innerText = freq.toFixed(1);
+    drawPlots(freq, amp);
+});
 
-// Hook up sliders
-const freqSlider = document.getElementById('freqSlider');
-const ampSlider = document.getElementById('ampSlider');
+document.getElementById("amplitude").addEventListener("input", function() {
+    const amp = parseFloat(this.value);
+    const freq = parseFloat(document.getElementById("frequency").value);
+    document.getElementById("amp-value").innerText = amp.toFixed(1);
+    drawPlots(freq, amp);
+});
 
-freqSlider.addEventListener('input', () => plot(parseFloat(freqSlider.value), parseFloat(ampSlider.value)));
-ampSlider.addEventListener('input', () => plot(parseFloat(freqSlider.value), parseFloat(ampSlider.value)));
+drawPlots(1.0, 1.0);
 </script>
+
 </body>
 </html>
