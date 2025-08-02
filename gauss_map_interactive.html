@@ -4,100 +4,123 @@
   <meta charset="UTF-8"/>
   <title>Interactive Gauss Map Dual Plot</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <style> body { font-family: sans-serif; } #slider-container { margin: 10px; } </style>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 20px; }
+    #slider-container { margin-bottom: 10px; }
+  </style>
 </head>
 <body>
 
 <h2>Gauss Map Dual Plot (Interactive)</h2>
+
 <div id="slider-container">
-  Frequency: <input id="slider" type="range" min="0.0" max="5.0" step="0.1" value="1.0">
-  Amplitude: <input id="amp" type="range" min="0.0" max="5.0" step="0.1" value="1.0">
+  Frequency: <input id="freq" type="range" min="0" max="5" step="0.1" value="1">
+  Amplitude: <input id="amp" type="range" min="0" max="5" step="0.1" value="1">
 </div>
+
 <div id="plot" style="width:100%; height:600px;"></div>
 
 <script>
-function compute(freq, amp) {
-  const n = 30;
-  const x = Array.from({length:n}, (_,i) => -1 + 2*i/(n-1));
-  const z = [], nx = [], ny = [], nz = [];
-  for (let i=0; i<n; i++) {
-    z[i]=[]; nx[i]=[]; ny[i]=[]; nz[i]=[];
-    for (let j=0; j<n; j++) {
-      const xv = x[j], yv = x[i];
-      const val = amp * Math.sin(Math.PI * freq * xv) * Math.cos(Math.PI * freq * yv);
-      z[i].push(val);
-      const dzdx = amp * freq * Math.PI * Math.cos(Math.PI * freq * xv) * Math.cos(Math.PI * freq * yv);
-      const dzdy = -amp * freq * Math.PI * Math.sin(Math.PI * freq * xv) * Math.sin(Math.PI * freq * yv);
-      let ux = -dzdx, uy = -dzdy, uz = 1.0;
-      const m = Math.hypot(ux, uy, uz);
-      ux /= m; uy /= m; uz /= m;
-      nx[i].push(ux); ny[i].push(uy); nz[i].push(uz);
+  // Compute surface and normals data
+  function computeData(freq, amp) {
+    const n = 30;
+    const x = Array.from({length: n}, (_, i) => -1 + 2 * i / (n - 1));
+    const y = [...x];
+    const z = [], nx = [], ny = [], nz = [];
+    for (let i = 0; i < n; i++) {
+      z[i] = []; nx[i] = []; ny[i] = []; nz[i] = [];
+      for (let j = 0; j < n; j++) {
+        const xv = x[j], yv = y[i];
+        const val = amp * Math.sin(Math.PI * freq * xv) * Math.cos(Math.PI * freq * yv);
+        z[i].push(val);
+        const dzdx = amp * freq * Math.PI * Math.cos(Math.PI * freq * xv) * Math.cos(Math.PI * freq * yv);
+        const dzdy = -amp * freq * Math.PI * Math.sin(Math.PI * freq * xv) * Math.sin(Math.PI * freq * yv);
+        let ux = -dzdx, uy = -dzdy, uz = 1;
+        const m = Math.hypot(ux, uy, uz);
+        ux /= m; uy /= m; uz /= m;
+        nx[i].push(ux); ny[i].push(uy); nz[i].push(uz);
+      }
     }
+    return {x, y, z, nx, ny, nz};
   }
-  return {x, z, nx, ny, nz};
-}
 
-function buildSphere() {
-  const mu = Array.from({length:40}, (_,i) => 2*Math.PI*i/39);
-  const mv = Array.from({length:20}, (_,j) => Math.PI*j/19);
-  const sx=[], sy=[], sz=[];
-  mu.forEach((u,i) => {
-    sx[i]=[]; sy[i]=[]; sz[i]=[];
-    mv.forEach((v,j) => {
-      sx[i][j] = Math.cos(u)*Math.sin(v);
-      sy[i][j] = Math.sin(u)*Math.sin(v);
-      sz[i][j] = Math.cos(v);
+  // Build sphere mesh
+  function buildSphere() {
+    const mu = Array.from({length: 40}, (_, i) => 2 * Math.PI * i / 39);
+    const mv = Array.from({length: 20}, (_, j) => Math.PI * j / 19);
+    const sx = [], sy = [], sz = [];
+    mu.forEach((u, i) => {
+      sx[i] = []; sy[i] = []; sz[i] = [];
+      mv.forEach((v, j) => {
+        sx[i][j] = Math.cos(u) * Math.sin(v);
+        sy[i][j] = Math.sin(u) * Math.sin(v);
+        sz[i][j] = Math.cos(v);
+      });
     });
+    return {sx, sy, sz};
+  }
+
+  // Draw both plots
+  function draw(freq, amp) {
+    const d = computeData(freq, amp);
+    const sp = buildSphere();
+
+    const traceSurface = {
+      type: 'surface',
+      x: d.x, y: d.y, z: d.z,
+      colorscale: 'Viridis', opacity: 0.7, showscale: false,
+      scene: 'scene1'
+    };
+    const traceNormalsSurf = {
+      type: 'cone',
+      x: d.x.flat(), y: d.y.flat(), z: d.z.flat(),
+      u: d.nx.flat(), v: d.ny.flat(), w: d.nz.flat(),
+      sizemode: 'absolute', sizeref: 0.2, anchor: 'tail',
+      showscale: false, color: 'red', scene: 'scene1'
+    };
+    const traceSphere = {
+      type: 'surface',
+      x: sp.sx, y: sp.sy, z: sp.sz,
+      opacity: 0.3, color: 'lightblue', showscale: false,
+      scene: 'scene2'
+    };
+    const traceNormalsSphere = {
+      type: 'cone',
+      x: d.nx.flat(), y: d.ny.flat(), z: d.nz.flat(),
+      u: d.nx.flat(), v: d.ny.flat(), w: d.nz.flat(),
+      sizemode: 'absolute', sizeref: 0.3, anchor: 'tail',
+      showscale: false, color: 'black', scene: 'scene2'
+    };
+
+    const layout = {
+      grid: {rows: 1, columns: 2, pattern: 'independent'},
+      scene1: {
+        domain: {x: [0, 0.48], y: [0, 1]},
+        aspectmode: 'cube',
+        title: 'Surface + Normals'
+      },
+      scene2: {
+        domain: {x: [0.52, 1], y: [0, 1]},
+        aspectmode: 'cube',
+        title: 'Unit Sphere (Gauss Map)'
+      },
+      title: `Gauss Map (freq=${freq}, amp=${amp})`,
+      margin: {l: 0, r: 0, t: 50, b: 0}
+    };
+
+    Plotly.react('plot', [traceSurface, traceNormalsSurf, traceSphere, traceNormalsSphere], layout);
+  }
+
+  // Slider event listeners
+  document.getElementById('freq').addEventListener('input', () => {
+    draw(parseFloat(document.getElementById('freq').value), parseFloat(document.getElementById('amp').value));
   });
-  return {sx, sy, sz};
-}
+  document.getElementById('amp').addEventListener('input', () => {
+    draw(parseFloat(document.getElementById('freq').value), parseFloat(document.getElementById('amp').value));
+  });
 
-function draw(freq, amp) {
-  const d = compute(freq, amp);
-  const sp = buildSphere();
-
-  const surface = {
-    type: 'surface', x: d.x, y: d.x, z: d.z,
-    colorscale: 'Viridis', opacity: 0.7, showscale: false,
-    scene: 'scene1'
-  };
-  const normalsSurf = {
-    type: 'cone',
-    x: d.x.flat(), y: d.x.flat(), z: d.z.flat(),
-    u: d.nx.flat(), v: d.ny.flat(), w: d.nz.flat(),
-    sizemode: 'absolute', sizeref:0.2, anchor:'tail',
-    showscale:false, color:'red', scene:'scene1'
-  };
-  const sphere = {
-    type: 'surface', x: sp.sx, y: sp.sy, z: sp.sz,
-    opacity:0.3, color:'lightblue', showscale:false,
-    scene:'scene2'
-  };
-  const normalsSphere = {
-    type:'cone',
-    x:d.nx.flat(), y:d.ny.flat(), z:d.nz.flat(),
-    u:d.nx.flat(), v:d.ny.flat(), w:d.nz.flat(),
-    sizemode:'absolute', sizeref:0.3, anchor:'tail',
-    showscale:false, color:'black', scene:'scene2'
-  };
-
-  const layout = {
-    grid:{rows:1, columns:2},
-    scene1:{domain:{x:[0,0.48], y:[0,1]}, aspectmode:'cube', title:'Surface + Normals'},
-    scene2:{domain:{x:[0.52,1], y:[0,1]}, aspectmode:'cube', title:'Unit Sphere (Gauss Map)'},
-    title:`Gauss Map (freq=${freq}, amp=${amp})`,
-    margin:{l:0,r:0,t50,b:0}
-  };
-
-  Plotly.react('plot', [surface, normalsSurf, sphere, normalsSphere], layout);
-}
-
-document.getElementById('slider').oninput = e =>
-  draw(e.target.value, document.getElementById('amp').value);
-document.getElementById('amp').oninput = e =>
-  draw(document.getElementById('slider').value, e.target.value);
-
-window.onload = () => draw(1.0, 1.0);
+  // Initial draw
+  window.onload = () => draw(1.0, 1.0);
 </script>
 
 </body>
