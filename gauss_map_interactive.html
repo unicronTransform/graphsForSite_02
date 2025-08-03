@@ -57,9 +57,10 @@ function generateData(freq, amp) {
       ny_i /= norm;
       nz_i /= norm;
 
-      nx.push(nx_i);
-      ny.push(ny_i);
-      nz.push(nz_i);
+      const scale = 5.0;  // Increase this for longer normals
+      nx.push(nx_i * scale);
+      ny.push(ny_i * scale);
+      nz.push(nz_i * scale);
 
       px.push(nx_i);
       py.push(ny_i);
@@ -89,7 +90,7 @@ function plot(freq, amp) {
     x: x, y: y, z: z,
     u: nx, v: ny, w: nz,
     sizemode: 'absolute',
-    sizeref: 3,
+    sizeref: .9,
     anchor: 'tail',
     colorscale: [[0, 'red'], [1, 'red']],
     showscale: false
