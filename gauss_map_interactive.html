@@ -4,142 +4,160 @@
   <meta charset="UTF-8">
   <title>Interactive Gauss Map Visualization</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    .plot-container {
+      display: flex;
+      justify-content: space-between;
+    }
+    .plot-box {
+      width: 49%;
+    }
+  </style>
 </head>
 <body>
+
 <h2>Interactive Gauss Map Visualization</h2>
+
 <label for="freqSlider">Frequency:</label>
 <input type="range" id="freqSlider" min="0.1" max="3.0" step="0.1" value="1.0">
 <span id="freqValue">1.0</span>
+
 &nbsp;&nbsp;
+
 <label for="ampSlider">Amplitude:</label>
 <input type="range" id="ampSlider" min="0.1" max="3.0" step="0.1" value="1.0">
 <span id="ampValue">1.0</span>
 
-<h3>Surface with Normals</h3>
-<div id="surfacePlot" style="width: 100%; height: 600px;"></div>
-
-<h3>Gauss Map (Normals on Unit Sphere)</h3>
-<div id="spherePlot" style="width: 100%; height: 600px;"></div>
+<div class="plot-container">
+  <div id="surfacePlot" class="plot-box"></div>
+  <div id="spherePlot" class="plot-box"></div>
+</div>
 
 <script>
 function generateData(freq, amp) {
-    const resolution = 60;
-    const x = [], y = [], z = [], nx = [], ny = [], nz = [], px = [], py = [], pz = [];
-    for (let i = 0; i < resolution; i++) {
-        let xi = -1 + 2 * i / (resolution - 1);
-        for (let j = 0; j < resolution; j++) {
-            let yj = -1 + 2 * j / (resolution - 1);
+  const resolution = 60;
+  const x = [], y = [], z = [], nx = [], ny = [], nz = [], px = [], py = [], pz = [];
 
-            const fz = amp * Math.sin(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
-            const fx = amp * freq * Math.PI * Math.cos(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
-            const fy = -amp * freq * Math.PI * Math.sin(freq * Math.PI * xi) * Math.sin(freq * Math.PI * yj);
+  for (let i = 0; i < resolution; i++) {
+    let xi = -1 + 2 * i / (resolution - 1);
+    for (let j = 0; j < resolution; j++) {
+      let yj = -1 + 2 * j / (resolution - 1);
 
-            x.push(xi); y.push(yj); z.push(fz);
+      let fz = amp * Math.sin(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
+      let fx = amp * freq * Math.PI * Math.cos(freq * Math.PI * xi) * Math.cos(freq * Math.PI * yj);
+      let fy = -amp * freq * Math.PI * Math.sin(freq * Math.PI * xi) * Math.sin(freq * Math.PI * yj);
 
-            let nx_i = -fx, ny_i = -fy, nz_i = 1;
-            let norm = Math.sqrt(nx_i ** 2 + ny_i ** 2 + nz_i ** 2);
-            nx_i /= norm; ny_i /= norm; nz_i /= norm;
+      x.push(xi);
+      y.push(yj);
+      z.push(fz);
 
-            nx.push(nx_i); ny.push(ny_i); nz.push(nz_i);
-            px.push(nx_i); py.push(ny_i); pz.push(nz_i);
-        }
+      let nx_i = -fx, ny_i = -fy, nz_i = 1.0;
+      let norm = Math.sqrt(nx_i**2 + ny_i**2 + nz_i**2);
+      nx_i /= norm;
+      ny_i /= norm;
+      nz_i /= norm;
+
+      nx.push(nx_i);
+      ny.push(ny_i);
+      nz.push(nz_i);
+
+      px.push(nx_i);
+      py.push(ny_i);
+      pz.push(nz_i);
     }
-    return {x, y, z, nx, ny, nz, px, py, pz};
+  }
+
+  return { x, y, z, nx, ny, nz, px, py, pz };
 }
 
 function plot(freq, amp) {
-    document.getElementById('freqValue').textContent = freq;
-    document.getElementById('ampValue').textContent = amp;
+  document.getElementById('freqValue').textContent = freq.toFixed(1);
+  document.getElementById('ampValue').textContent = amp.toFixed(1);
 
-    const {x, y, z, nx, ny, nz, px, py, pz} = generateData(freq, amp);
+  const { x, y, z, nx, ny, nz, px, py, pz } = generateData(freq, amp);
 
-    Plotly.newPlot('surfacePlot', [
-        {
-            type: 'mesh3d',
-            x, y, z,
-            intensity: z,
-            colorscale: 'Viridis',
-            opacity: 0.7,
-            name: 'Surface'
-        },
-        {
-            type: 'cone',
-            x, y, z,
-            u: nx, v: ny, w: nz,
-            sizemode: 'absolute',
-            sizeref: 0.3,
-            anchor: 'tail',
-            colorscale: [[0, 'red'], [1, 'red']],
-            showscale: false,
-            name: 'Normals'
-        }
-    ], {
-        margin: {l: 0, r: 0, t: 30, b: 0},
-        scene: {
-            xaxis: {title: 'x'},
-            yaxis: {title: 'y'},
-            zaxis: {title: 'z'},
-            aspectmode: 'cube'
-        }
-    });
+  const surfaceTrace = {
+    type: 'mesh3d',
+    x: x, y: y, z: z,
+    intensity: z,
+    colorscale: 'Viridis',
+    opacity: 0.7
+  };
 
-    const SPHERE_RES = 60;
-    const sphereX = [], sphereY = [], sphereZ = [];
-    for (let i = 0; i < SPHERE_RES; i++) {
-        let theta = 2 * Math.PI * i / SPHERE_RES;
-        let xRow = [], yRow = [], zRow = [];
-        for (let j = 0; j < SPHERE_RES; j++) {
-            let phi = Math.PI * j / (SPHERE_RES - 1);
-            xRow.push(Math.sin(phi) * Math.cos(theta));
-            yRow.push(Math.sin(phi) * Math.sin(theta));
-            zRow.push(Math.cos(phi));
-        }
-        sphereX.push(xRow);
-        sphereY.push(yRow);
-        sphereZ.push(zRow);
+  const normalTrace = {
+    type: 'cone',
+    x: x, y: y, z: z,
+    u: nx, v: ny, w: nz,
+    sizemode: 'absolute',
+    sizeref: 0.3,
+    anchor: 'tail',
+    colorscale: [[0, 'red'], [1, 'red']],
+    showscale: false
+  };
+
+  const sphereTrace = {
+    type: 'surface',
+    x: [], y: [], z: [],
+    opacity: 0.3,
+    colorscale: 'RdBu',
+    showscale: false
+  };
+
+  const SPHERE_RES = 60;
+  for (let i = 0; i < SPHERE_RES; i++) {
+    let theta = 2 * Math.PI * i / SPHERE_RES;
+    let xRow = [], yRow = [], zRow = [];
+    for (let j = 0; j < SPHERE_RES; j++) {
+      let phi = Math.PI * j / (SPHERE_RES - 1);
+      xRow.push(Math.sin(phi) * Math.cos(theta));
+      yRow.push(Math.sin(phi) * Math.sin(theta));
+      zRow.push(Math.cos(phi));
     }
+    sphereTrace.x.push(xRow);
+    sphereTrace.y.push(yRow);
+    sphereTrace.z.push(zRow);
+  }
 
-    Plotly.newPlot('spherePlot', [
-        {
-            type: 'surface',
-            x: sphereX,
-            y: sphereY,
-            z: sphereZ,
-            opacity: 0.3,
-            colorscale: 'RdBu',
-            showscale: false
-        },
-        {
-            type: 'scatter3d',
-            mode: 'markers',
-            x: px,
-            y: py,
-            z: pz,
-            marker: {
-                size: 3,
-                color: 'black'
-            },
-            name: 'Mapped Normals'
-        }
-    ], {
-        margin: {l: 0, r: 0, t: 30, b: 0},
-        scene: {
-            xaxis: {title: 'x', range: [-1.1, 1.1]},
-            yaxis: {title: 'y', range: [-1.1, 1.1]},
-            zaxis: {title: 'z', range: [-1.1, 1.1]},
-            aspectmode: 'cube'
-        }
-    });
+  const mappedNormals = {
+    type: 'scatter3d',
+    mode: 'markers',
+    x: px, y: py, z: pz,
+    marker: { size: 3, color: 'black' }
+  };
+
+  Plotly.newPlot('surfacePlot', [surfaceTrace, normalTrace], {
+    title: 'Surface with Normals',
+    margin: { t: 40 },
+    scene: { aspectmode: 'cube' }
+  });
+
+  Plotly.newPlot('spherePlot', [sphereTrace, mappedNormals], {
+    title: 'Gauss Map (Normals on Unit Sphere)',
+    margin: { t: 40 },
+    scene: {
+      xaxis: { range: [-1.1, 1.1] },
+      yaxis: { range: [-1.1, 1.1] },
+      zaxis: { range: [-1.1, 1.1] },
+      aspectmode: 'cube'
+    }
+  });
 }
 
-plot(1.0, 1.0);
+document.getElementById('freqSlider').addEventListener('input', function () {
+  const freq = parseFloat(this.value);
+  const amp = parseFloat(document.getElementById('ampSlider').value);
+  plot(freq, amp);
+});
 
-document.getElementById('freqSlider').addEventListener('input', () =>
-    plot(parseFloat(freqSlider.value), parseFloat(ampSlider.value))
-);
-document.getElementById('ampSlider').addEventListener('input', () =>
-    plot(parseFloat(freqSlider.value), parseFloat(ampSlider.value))
-);
+document.getElementById('ampSlider').addEventListener('input', function () {
+  const amp = parseFloat(this.value);
+  const freq = parseFloat(document.getElementById('freqSlider').value);
+  plot(freq, amp);
+});
+
+// Initial plot
+plot(1.0, 1.0);
 </script>
+
 </body>
 </html>
